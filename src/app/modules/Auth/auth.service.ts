@@ -1,24 +1,56 @@
 import prisma from "../../../lib/prisma";
+import ApiError from "../../errors/ApiError";
+import { StatusCodes } from 'http-status-codes';
+import bcrypt from 'bcrypt';
+import config from "../../config";
+import { generateToken } from "../../../helpers/jwtHelpers";
+const registerUser = async (payload: RegisterInput) => {
 
-const registerUser = async (payload: any) => {
-    // 1. check user exists
-    const existingUser = await prisma.user.findUnique({
-        where: {
-            email: payload.email
-        }
-    });
+  // 1. Email check
+  const existingUser = await prisma.user.findUnique({
+    where: { email: payload.email },
+    select: { id: true },
+  });
 
-    if (existingUser) {
-        throw new Error("User already exists!");
-    }
+  if (existingUser) {
+    throw new ApiError(StatusCodes.CONFLICT, 'Email already in use', );
+  }
 
-    // 2. create new user
-    const newUser = await prisma.user.create({
-        data: payload
-    });
-console.log("new user", newUser)
+  // 2. password → passwordHash convert করো
+  const passwordHash = await bcrypt.hash(payload.password, config.salt_round as string);
 
-    return newUser;
+  // 3. new user create
+  const newUser = await prisma.user.create({
+    data: {
+      name:         payload.name,
+      email:        payload.email,
+      passwordHash,           
+    },
+    select: {
+      id:         true,
+      name:       true,
+      email:      true,
+      role:       true,
+      avatarUrl:  true,
+      isVerified: true,
+      createdAt:  true,
+     
+    },
+  });
+ const payloadUser = {
+    userId: newUser.id,
+    email:  newUser.email,
+    role:   newUser.role,
+ }
+  // 4. Token generate
+  const tokens = generateToken({
+    payloadUser,
+    secret :config.jwt.jwt_secret,
+    expiresIn: config.jwt.expires_in as string
+
+  });
+
+  return { user: newUser, tokens };
 };
 
 const loginUser = async (payload: any) => {
