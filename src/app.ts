@@ -17,5 +17,6 @@ app.get('/', (req,res)=>{
 
 // api routes
 app.use("/api/v1/auth", AuthRoutes);
+app.use("*", require("./app/middlewares/notFound").notFound);
 
 export default app;
