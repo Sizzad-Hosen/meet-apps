@@ -21,6 +21,7 @@ model User {
   googleId     String?  @unique @map("google_id")
   avatarUrl    String?  @map("avatar_url")
   role         UserRole @default(USER)
+  
   isVerified   Boolean  @default(false) @map("is_verified")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")

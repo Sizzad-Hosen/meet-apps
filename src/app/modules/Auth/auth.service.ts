@@ -6,6 +6,7 @@ import ApiError from '../../errors/ApiError';
 import config from '../../config';
 import { generateToken, verifyToken } from '../../../helpers/jwtHelpers';
 import { sendEmail } from '../../../shared/sendEmail';
+// import { blockToken } from '../../../helpers/tokenBlocklist';
 
 const registerUser = async (payload: any) => {
 
@@ -212,10 +213,29 @@ const refreshToken = async (token: string) => {
   return { accessToken, refreshToken: newRefreshToken };
 };
 
+const logoutUser = async (token: string) => {
+  const decoded = await verifyToken(token, config.jwt.refresh_token_secret as string);
+
+  if (!decoded?.email) {
+    throw new ApiError(StatusCodes.UNAUTHORIZED, 'Invalid or expired refresh token');
+  }
+
+  // ✅ Redis blocklist (production)
+  const now = Math.floor(Date.now() / 1000);
+  const expiresInSeconds = (decoded.exp as number) - now;
+
+  if (expiresInSeconds > 0) {
+    // await blockToken(token, expiresInSeconds);
+  }
+};
+
+
 export const AuthServices = {
   registerUser,
   loginUser,
   forgotPasswordUser,
   resetPassword,
-  refreshToken
+  refreshToken,
+  logoutUser
 };
+

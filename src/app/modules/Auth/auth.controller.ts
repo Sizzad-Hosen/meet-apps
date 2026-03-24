@@ -93,10 +93,43 @@ const refreshToken = catchAsync(async(req,res)=>{
   });
 });
 
+const logout = catchAsync(async (req: Request, res: Response) => {
+  const { refreshToken } = req.cookies;
+
+  // ✅ Guard: if no cookie, just clear and return
+  if (!refreshToken) {
+    res.clearCookie('refreshToken');
+    sendResponse(res, {
+      statusCode: StatusCodes.OK,
+      success: true,
+      message: 'Logged out successfully',
+      data: null,
+    });
+    return;
+  }
+
+  await AuthServices.logoutUser(refreshToken);
+
+  res.clearCookie('refreshToken', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+  });
+
+  sendResponse(res, {
+    statusCode: StatusCodes.OK,
+    success: true,
+    message: 'Logged out successfully',
+    data: null,
+  });
+});
+
+
 export const AuthControllers = {
   register,
   login,
   forgotPassword,
   resetPassword,
-  refreshToken
+  refreshToken,
+  logout
 };
