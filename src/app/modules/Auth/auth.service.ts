@@ -5,6 +5,7 @@ import prisma from '../../../lib/prisma';
 import ApiError from '../../errors/ApiError';
 import config from '../../config';
 import { generateToken } from '../../../helpers/jwtHelpers';
+import { sendEmail } from '../../../shared/sendEmail';
 
 const registerUser = async (payload: any) => {
 
@@ -117,7 +118,40 @@ const loginUser = async (payload: any) => {
   };
 };
 
+
+const forgotPasswordUser = async(payload: { email: string })=>{
+
+  const user = await prisma.user.findUnique({
+    where:{
+      email:payload.email
+    }
+  })
+  
+  if(!user){
+    throw new ApiError(StatusCodes.NOT_FOUND, 'User not found with this email');
+  }
+
+  // if(!user.isVerified){
+  //   throw new ApiError(StatusCodes.BAD_REQUEST, 'Please verify your email first');
+  // }
+
+  const resetLink = `${config.reset_pass_link}?token=${user.id}`;
+
+  await sendEmail(user.email, `<p>Click <a href="${resetLink}">here</a> to reset your password.</p>`);
+
+  return {
+    resetLink
+  }
+
+
+}
+
+const resetPassword = async()=>{
+  
+}
+
 export const AuthServices = {
   registerUser,
   loginUser,
+  forgotPasswordUser
 };
