@@ -4,7 +4,7 @@ import ApiError from "../errors/ApiError";
 import { verifyToken } from "../../helpers/jwtHelpers";
 import { UserRole } from "@prisma/client";
 
-export const checkAuth = (...authRoles: UserRole[]) => async (req: Request, res: Response, next: NextFunction) => {
+export const auth = (...authRoles: UserRole[]) => async (req: Request, res: Response, next: NextFunction) => {
   try {
 
     const accessToken = req.cookies?.["accessToken"] 
