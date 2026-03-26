@@ -39,7 +39,37 @@ const createMeetings = async (payload: any, userId: string) => {
     return meeting;
 };
 
+const  getMeetingByJoinCode= async (joinCode: string, userId: string) => {
 
+    console.log('Looking for meeting with join code:', joinCode);
+
+const meeting = await prisma.meeting.findUnique({
+  where: {
+    join_code: joinCode 
+  },
+  include: {
+    meetingParticipants: true
+  }
+});
+    if (!meeting) return null;
+
+    // Generate LiveKit token for this user
+    const livekitToken = generateLiveKitToken({
+      userId,
+      roomName: meeting.livekit_room_name,
+      role: 'guest'
+    });
+
+    return {
+      id: meeting.id,
+      title: meeting.title,
+      join_code: meeting.join_code,
+      livekit_room_name: meeting.livekit_room_name,
+      livekitToken,
+      participants: meeting.meetingParticipants
+    };
+  }
 export const MeetingServices = {
-    createMeetings
+    createMeetings,
+    getMeetingByJoinCode
 }

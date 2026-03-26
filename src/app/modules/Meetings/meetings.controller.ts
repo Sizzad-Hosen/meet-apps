@@ -34,6 +34,38 @@ const createMeeting = catchAsync(async (req: Request, res: Response) => {
 });
 
 
+const  joinMeeting = async (req: Request, res: Response) => {
+    try {
+      // const { joinCode } = req.body
+      console.log('Join code received:', req.body);
+      const userId = req.user?.userId;
+
+      if (!userId) {
+        return res.status(401).json({ success: false, message: 'Unauthorized' });
+      }
+
+      const meeting = await MeetingServices.getMeetingByJoinCode(req.body, userId);
+
+      if (!meeting) {
+        return res.status(404).json({ success: false, message: 'Meeting not found' });
+      }
+
+  sendResponse(res, {
+    statusCode: StatusCodes.CREATED,
+    success:    true,
+    message:    'Meeting created successfully',
+    data: {
+      meeting
+    }
+    },
+  )
+    
+    } catch (error: any) {
+      return res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
 export const MeetingsControllers = {
-    createMeeting
+    createMeeting,
+    joinMeeting
 }

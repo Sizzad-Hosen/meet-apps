@@ -8,6 +8,10 @@ router.post("/create",
     // validateRequest(),
     auth(), MeetingsControllers.createMeeting);
 
+router.post("/join",
+    // validateRequest(),
+    auth(), MeetingsControllers.joinMeeting);
+
 
 
 export const MeetingsRoutes = router ;
