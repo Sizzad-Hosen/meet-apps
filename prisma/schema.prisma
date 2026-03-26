@@ -1,7 +1,6 @@
 // prisma/schema.prisma
 generator client {
   provider = "prisma-client-js"
-
 }
 
 datasource db {
@@ -13,18 +12,98 @@ enum UserRole {
   ADMIN
 }
 
+enum MeetingStatus {
+  waiting
+  active
+  ended
+}
+
+enum MeetingType {
+  instant
+  scheduled
+}
+
+enum ParticipantRole {
+  host
+  cohost
+  guest
+}
+
+enum ParticipantStatus {
+  waiting
+  admitted
+  denied
+  left
+}
+
 model User {
-  id           String   @id @default(uuid())
-  name         String   @db.VarChar(100)
-  email        String   @unique @db.VarChar(255)
-  password     String?                          // ← password
-  googleId     String?  @unique @map("google_id")
-  avatarUrl    String?  @map("avatar_url")
-  role         UserRole @default(USER)
-  
-  isVerified   Boolean  @default(false) @map("is_verified")
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @db.VarChar(100)
+  email     String   @unique @db.VarChar(255)
+  password  String?
+  googleId  String?  @unique @map("google_id")
+  avatarUrl String?  @map("avatar_url")
+  role      UserRole @default(USER)
+
+  isVerified          Boolean              @default(false) @map("is_verified")
+  createdAt           DateTime             @default(now()) @map("created_at")
+  updatedAt           DateTime             @updatedAt @map("updated_at")
+  meetings            Meeting[]
+  meetingParticipants MeetingParticipant[]
 
   @@map("users")
+}
+
+model Meeting {
+  id                String        @id @default(uuid()) @db.Uuid
+  title             String        @db.VarChar(255)
+  join_code         String        @unique @db.VarChar(12)
+  host_id           String        @db.Uuid
+  user              User          @relation(fields: [host_id], references: [id])
+  livekit_room_name String        @unique
+  status            MeetingStatus @default(waiting)
+  type              MeetingType   @default(instant)
+
+  scheduled_at DateTime?
+  started_at   DateTime?
+  ended_at     DateTime?
+
+  waiting_room_on            Boolean @default(true)
+  password_hash              String?
+  max_participants           Int     @default(100)
+  allow_screenshare          Boolean @default(true)
+  screenshare_needs_approval Boolean @default(false)
+  is_recorded                Boolean @default(false)
+
+  created_at          DateTime             @default(now())
+  meetingParticipants MeetingParticipant[]
+
+  @@map("meetings")
+}
+
+// Meeting Participants
+
+model MeetingParticipant {
+  id         String @id @default(uuid()) @db.Uuid
+  meeting_id String @db.Uuid
+  user_id    String @db.Uuid
+
+  role   ParticipantRole   @default(guest)
+  status ParticipantStatus @default(waiting)
+
+  livekit_token     String?
+  is_muted          Boolean   @default(false)
+  is_video_off      Boolean   @default(false)
+  is_screen_sharing Boolean   @default(false)
+  hand_raised       Boolean   @default(false)
+  joined_at         DateTime?
+  left_at           DateTime?
+
+  // Relations
+  meeting Meeting @relation(fields: [meeting_id], references: [id])
+  user    User    @relation(fields: [user_id], references: [id])
+
+  // A user can only appear once per meeting
+  @@unique([meeting_id, user_id])
+  @@map("meeting_participants")
 }
