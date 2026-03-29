@@ -16,6 +16,9 @@ export function generateLiveKitToken({
     identity: userId,
   });
 
+  console.log('Generating LiveKit token for user:', userId, 'in room:', roomName, 'with role:', role)
+
+  console.log(at);
   // Permissions
   at.addGrant({
     room: roomName,

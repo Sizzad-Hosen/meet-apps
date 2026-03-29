@@ -12,6 +12,10 @@ router.post("/join",
     // validateRequest(),
     auth(), MeetingsControllers.joinMeeting);
 
+router.post("/:code/admit",  auth(), MeetingsControllers.admitParticipant);
+router.post("/:code/deny",   auth(), MeetingsControllers.denyParticipant);
+router.post("/:code/kick",   auth(), MeetingsControllers.kickParticipant);
+router.post("/:code/end",            auth(), MeetingsControllers.endMeeting);
 
 
 export const MeetingsRoutes = router ;
