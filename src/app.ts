@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import cookieParser from 'cookie-parser';
 import { AuthRoutes } from "./app/modules/Auth/auth.routes";
+import { MeetingsRoutes } from "./app/modules/Meetings/meetings.routes";
 const app = express();
 
 // middlewares
@@ -17,6 +18,7 @@ app.get('/', (req,res)=>{
 
 // api routes
 app.use("/api/v1/auth", AuthRoutes);
+app.use("/api/v1/meetings", MeetingsRoutes);
 app.use("*", require("./app/middlewares/notFound").notFound);
 app.use(require("./app/middlewares/globalErrorHandler").globalErrorHandler);
 export default app;
