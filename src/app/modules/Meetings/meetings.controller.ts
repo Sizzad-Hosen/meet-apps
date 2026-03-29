@@ -36,15 +36,15 @@ const createMeeting = catchAsync(async (req: Request, res: Response) => {
 
 const  joinMeeting = async (req: Request, res: Response) => {
     try {
-      // const { joinCode } = req.body
-      console.log('Join code received:', req.body);
+       const { joinCode } = req.body
+      console.log('Join code received:', {joinCode});
       const userId = req.user?.userId;
 
       if (!userId) {
         return res.status(401).json({ success: false, message: 'Unauthorized' });
       }
 
-      const meeting = await MeetingServices.getMeetingByJoinCode(req.body, userId);
+      const meeting = await MeetingServices.getMeetingByJoinCode(joinCode, userId);
 
       if (!meeting) {
         return res.status(404).json({ success: false, message: 'Meeting not found' });
