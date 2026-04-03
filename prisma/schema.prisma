@@ -50,6 +50,7 @@ model User {
   updatedAt           DateTime             @updatedAt @map("updated_at")
   meetings            Meeting[]
   meetingParticipants MeetingParticipant[]
+  screenShares        ScreenShare[]
 
   @@map("users")
 }
@@ -77,6 +78,7 @@ model Meeting {
 
   created_at          DateTime             @default(now())
   meetingParticipants MeetingParticipant[]
+  screenShares        ScreenShare[]
 
   @@map("meetings")
 }
@@ -106,4 +108,22 @@ model MeetingParticipant {
   // A user can only appear once per meeting
   @@unique([meeting_id, user_id])
   @@map("meeting_participants")
+}
+
+model ScreenShare {
+  id String @id @default(uuid()) @db.Uuid
+
+  meeting_id String @db.Uuid
+  user_id    String @db.Uuid
+
+  meeting Meeting @relation(fields: [meeting_id], references: [id])
+  user    User    @relation(fields: [user_id], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([meeting_id, user_id])
+  @@index([meeting_id])
+  @@index([user_id])
+  @@map("screenShare")
 }
