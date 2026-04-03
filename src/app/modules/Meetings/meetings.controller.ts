@@ -240,13 +240,8 @@ const muteAll = async (req: Request, res: Response) => {
 const getParticipants = async (req: Request, res: Response) => {
   try {
     const { code } = req.params;
-    const currentUserId = req.user?.userId;
-
-    if (!currentUserId) {
-      return res.status(401).json({ success: false, message: 'Unauthorized' });
-    }
-
-    const result = await MeetingServices.getParticipants(code, currentUserId);
+  
+    const result = await MeetingServices.getParticipants(code);
 
     sendResponse(res, {
       statusCode: StatusCodes.OK,

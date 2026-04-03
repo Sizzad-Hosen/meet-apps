@@ -22,5 +22,5 @@ router.post("/:code/end",            auth(), MeetingsControllers.endMeeting);
 router.post("/:code/mute/:userId",   auth(), MeetingsControllers.muteParticipant);
 router.post("/:code/mute-all",       auth(), MeetingsControllers.muteAll);
 router.post("/:code/cohost/:userId", auth(), MeetingsControllers.assignCohost);
-
+router.get("/:code/participants",    MeetingsControllers.getParticipants);
 export const MeetingsRoutes = router ;

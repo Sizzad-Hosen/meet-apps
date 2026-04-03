@@ -291,7 +291,7 @@ const muteAll = async (code: string, currentUserId: string) => {
   return { message: 'All participants muted' };
 };
 
-const getParticipants = async (code: string, currentUserId: string) => {
+const getParticipants = async (code: string) => {
   const meeting = await prisma.meeting.findUnique({
     where: { join_code: code }
   });
