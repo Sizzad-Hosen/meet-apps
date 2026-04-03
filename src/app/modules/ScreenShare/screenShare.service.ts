@@ -38,34 +38,7 @@ const stopScreenShare = async (code: string, currentUserId: string) => {
     data: { is_screen_sharing: false }
   });
 };
-const getScreenShareStatus = async (code: string, currentUserId: string) => {
-  const meeting = await prisma.meeting.findUnique({
-    where: { join_code: code }
-  });
 
-  if (!meeting) throw new Error('Meeting not found');
-
-  const participant = await prisma.meetingParticipant.findFirst({
-    where: { meeting_id: meeting.id, user_id: currentUserId, status: 'admitted' }
-  });
-
-  if (!participant) throw new Error('You are not a participant of this meeting');
-
-  const sharingParticipants = await prisma.meetingParticipant.findMany({
-    where: {
-      meeting_id: meeting.id,
-      is_screen_sharing: true
-    },
-    include: {
-      user: { select: { id: true, name: true, email: true } }
-    }
-  });
-
-  return {
-    total_sharing: sharingParticipants.length,
-    participants: sharingParticipants
-  };
-};
 const approveScreenShare = async (code: string, targetUserId: string, currentUserId: string) => {
   const meeting = await prisma.meeting.findUnique({
     where: { join_code: code }
@@ -127,6 +100,6 @@ export const ScreenShareServices = {
   startScreenShare,
   stopScreenShare,
   approveScreenShare,
-  denyScreenShare,
-  getScreenShareStatus
+  denyScreenShare
+
 };
