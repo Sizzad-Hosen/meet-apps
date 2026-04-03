@@ -252,6 +252,79 @@ const endMeeting = async (code: string, currentUserId: string) => {
   return updated;
 };
 
+const muteParticipant = async (code: string, targetUserId: string, currentUserId: string) => {
+  const meeting = await prisma.meeting.findUnique({
+    where: { join_code: code }
+  });
+
+  if (!meeting) throw new Error('Meeting not found');
+  if (meeting.host_id !== currentUserId) throw new Error('Only host can mute');
+
+  const participant = await prisma.meetingParticipant.findFirst({
+    where: { meeting_id: meeting.id, user_id: targetUserId }
+  });
+
+  if (!participant) throw new Error('Participant not found');
+
+  return await prisma.meetingParticipant.update({
+    where: { id: participant.id },
+    data: { is_muted: true }
+  });
+};
+
+const muteAll = async (code: string, currentUserId: string) => {
+  const meeting = await prisma.meeting.findUnique({
+    where: { join_code: code }
+  });
+
+  if (!meeting) throw new Error('Meeting not found');
+  if (meeting.host_id !== currentUserId) throw new Error('Only host can mute all');
+
+  await prisma.meetingParticipant.updateMany({
+    where: {
+      meeting_id: meeting.id,
+      role: { not: 'host' }  
+    },
+    data: { is_muted: true }
+  });
+
+  return { message: 'All participants muted' };
+};
+
+const getParticipants = async (code: string, currentUserId: string) => {
+  const meeting = await prisma.meeting.findUnique({
+    where: { join_code: code }
+  });
+
+  if (!meeting) throw new Error('Meeting not found');
+
+  return await prisma.meetingParticipant.findMany({
+    where: { meeting_id: meeting.id },
+    include: { user: { select: { id: true, name: true, email: true } } }
+  });
+};
+
+const assignCohost = async (code: string, targetUserId: string, currentUserId: string) => {
+  const meeting = await prisma.meeting.findUnique({
+    where: { join_code: code }
+  });
+
+  if (!meeting) throw new Error('Meeting not found');
+  if (meeting.host_id !== currentUserId) throw new Error('Only host can assign co-host');
+
+  const participant = await prisma.meetingParticipant.findFirst({
+    where: { meeting_id: meeting.id, user_id: targetUserId }
+  });
+
+  if (!participant) throw new Error('Participant not found');
+  if (participant.role === 'host') throw new Error('Cannot change host role');
+
+  return await prisma.meetingParticipant.update({
+    where: { id: participant.id },
+    data: { role: 'cohost' }
+  });
+};
+
 export const MeetingServices = {
   createMeetings,
   getMeetingByJoinCode,
@@ -260,6 +333,9 @@ export const MeetingServices = {
   denyParticipant,
   kickParticipant,
   endMeeting,
-  getWaitingRoom
+  getWaitingRoom,
+  muteParticipant,
+  muteAll,
+  getParticipants,
+  assignCohost
 };
-

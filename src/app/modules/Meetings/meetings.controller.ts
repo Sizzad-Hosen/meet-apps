@@ -193,6 +193,94 @@ const endMeeting =catchAsync( async (req: Request, res: Response) => {
   }
 });
 
+const muteParticipant = async (req: Request, res: Response) => {
+  try {
+    const { code, userId: targetUserId } = req.params;
+    const currentUserId = req.user?.userId;
+
+    if (!currentUserId) {
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+
+    const result = await MeetingServices.muteParticipant(code, targetUserId, currentUserId);
+
+    sendResponse(res, {
+      statusCode: StatusCodes.OK,
+      success: true,
+      message: 'Participant muted successfully',
+      data: result
+    });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+const muteAll = async (req: Request, res: Response) => {
+  try {
+    const { code } = req.params;
+    const currentUserId = req.user?.userId;
+
+    if (!currentUserId) {
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+
+    const result = await MeetingServices.muteAll(code, currentUserId);
+
+    sendResponse(res, {
+      statusCode: StatusCodes.OK,
+      success: true,
+      message: 'All participants muted successfully',
+      data: result
+    });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+const getParticipants = async (req: Request, res: Response) => {
+  try {
+    const { code } = req.params;
+    const currentUserId = req.user?.userId;
+
+    if (!currentUserId) {
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+
+    const result = await MeetingServices.getParticipants(code, currentUserId);
+
+    sendResponse(res, {
+      statusCode: StatusCodes.OK,
+      success: true,
+      message: 'Participants fetched successfully',
+      data: result
+    });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+const assignCohost = async (req: Request, res: Response) => {
+  try {
+    const { code, userId: targetUserId } = req.params;
+    const currentUserId = req.user?.userId;
+
+    if (!currentUserId) {
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+
+    const result = await MeetingServices.assignCohost(code, targetUserId, currentUserId);
+
+    sendResponse(res, {
+      statusCode: StatusCodes.OK,
+      success: true,
+      message: 'Co-host assigned successfully',
+      data: result
+    });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 export const MeetingsControllers = {
   createMeeting,
   joinMeeting,
@@ -201,5 +289,9 @@ export const MeetingsControllers = {
   denyParticipant,
   kickParticipant,
   endMeeting,
-  getWaitingRoom
+  getWaitingRoom,
+  muteParticipant,
+  muteAll,
+  getParticipants,
+  assignCohost
 };

@@ -19,5 +19,8 @@ router.post("/:code/deny",   auth(), MeetingsControllers.denyParticipant);
 router.post("/:code/kick",   auth(), MeetingsControllers.kickParticipant);
 router.post("/:code/end",            auth(), MeetingsControllers.endMeeting);
 
+router.post("/:code/mute/:userId",   auth(), MeetingsControllers.muteParticipant);
+router.post("/:code/mute-all",       auth(), MeetingsControllers.muteAll);
+router.post("/:code/cohost/:userId", auth(), MeetingsControllers.assignCohost);
 
 export const MeetingsRoutes = router ;
