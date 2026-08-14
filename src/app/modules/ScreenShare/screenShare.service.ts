@@ -1,5 +1,7 @@
 import { StatusCodes } from 'http-status-codes';
+import { TrackSource } from 'livekit-server-sdk';
 import prisma from '../../../lib/prisma';
+import { clientes } from '../../../helpers/s3';
 import ApiError from '../../errors/ApiError';
 
 const getMeetingAndParticipant = async (code: string, currentUserId: string) => {
@@ -22,13 +24,49 @@ const getMeetingAndParticipant = async (code: string, currentUserId: string) => 
   return { meeting, participant };
 };
 
-const getActiveShare = async (meetingId: string) => prisma.screenShare.findFirst({
-  where: { meeting_id: meetingId },
+const getActiveShare = async (meetingId: string) => {
+  const sharingParticipant = await prisma.meetingParticipant.findFirst({
+    where: { meeting_id: meetingId, status: 'admitted', is_screen_sharing: true }
+  });
+
+  if (!sharingParticipant) {
+    return null;
+  }
+
+  return prisma.screenShare.findFirst({
+  where: { meeting_id: meetingId, user_id: sharingParticipant.user_id },
   include: {
     user: {
       select: { id: true, name: true, email: true }
     }
   }
+});
+};
+
+const getShareRequests = async (meetingId: string) => {
+  const requests = await prisma.screenShare.findMany({
+    where: { meeting_id: meetingId },
+    include: {
+      user: {
+        select: { id: true, name: true, email: true }
+      }
+    }
+  });
+  const activeShare = await getActiveShare(meetingId);
+
+  return {
+    activeShare,
+    pending: requests.filter((request) => request.user_id !== activeShare?.user_id)
+  };
+};
+
+const screenSharePermission = (enabled: boolean) => ({
+  canPublish: true,
+  canSubscribe: true,
+  canPublishData: true,
+  canPublishSources: enabled
+    ? [TrackSource.CAMERA, TrackSource.MICROPHONE, TrackSource.SCREEN_SHARE, TrackSource.SCREEN_SHARE_AUDIO]
+    : [TrackSource.CAMERA, TrackSource.MICROPHONE]
 });
 
 const startScreenShare = async (code: string, currentUserId: string) => {
@@ -44,6 +82,19 @@ const startScreenShare = async (code: string, currentUserId: string) => {
   }
 
   if (meeting.screenshare_needs_approval && participant.role === 'guest') {
+    await prisma.screenShare.upsert({
+      where: {
+        meeting_id_user_id: {
+          meeting_id: meeting.id,
+          user_id: currentUserId
+        }
+      },
+      update: {},
+      create: {
+        meeting_id: meeting.id,
+        user_id: currentUserId
+      }
+    });
     await prisma.meetingParticipant.update({
       where: { id: participant.id },
       data: { is_screen_sharing: false }
@@ -90,6 +141,14 @@ const stopScreenShare = async (code: string, currentUserId: string) => {
     }
   });
 
+  if (meeting.screenshare_needs_approval && participant.role === 'guest') {
+    await clientes.roomServiceClient.updateParticipant(
+      meeting.livekit_room_name,
+      currentUserId,
+      { permission: screenSharePermission(false) }
+    );
+  }
+
   return prisma.meetingParticipant.update({
     where: { id: participant.id },
     data: { is_screen_sharing: false }
@@ -98,11 +157,12 @@ const stopScreenShare = async (code: string, currentUserId: string) => {
 
 const getScreenShareStatus = async (code: string, currentUserId: string) => {
   const { meeting } = await getMeetingAndParticipant(code, currentUserId);
-  const activeShare = await getActiveShare(meeting.id);
+  const { activeShare, pending } = await getShareRequests(meeting.id);
 
   return {
     total_sharing: activeShare ? 1 : 0,
-    participant: activeShare
+    participant: activeShare,
+    pending
   };
 };
 
@@ -139,6 +199,20 @@ const approveScreenShare = async (code: string, targetUserId: string, currentUse
   if (activeShare && activeShare.user_id !== targetUserId) {
     throw new ApiError(StatusCodes.CONFLICT, 'Another participant is already sharing their screen');
   }
+
+
+  const request = await prisma.screenShare.findFirst({
+    where: { meeting_id: meeting.id, user_id: targetUserId }
+  });
+  if (!request) {
+    throw new ApiError(StatusCodes.NOT_FOUND, 'Screenshare request not found');
+  }
+
+  await clientes.roomServiceClient.updateParticipant(
+    meeting.livekit_room_name,
+    targetUserId,
+    { permission: screenSharePermission(true) }
+  );
 
   await prisma.screenShare.upsert({
     where: {
@@ -200,6 +274,14 @@ const denyScreenShare = async (code: string, targetUserId: string, currentUserId
       user_id: targetUserId
     }
   });
+
+  if (meeting.screenshare_needs_approval && participant.role === 'guest') {
+    await clientes.roomServiceClient.updateParticipant(
+      meeting.livekit_room_name,
+      targetUserId,
+      { permission: screenSharePermission(false) }
+    );
+  }
 
   return prisma.meetingParticipant.update({
     where: { id: participant.id },

@@ -10,7 +10,8 @@ export const auth = (...authRoles: UserRole[]) => async (req: Request, res: Resp
     const bearerToken = req.headers?.authorization?.startsWith("Bearer ")
       ? req.headers.authorization.split(" ")[1]
       : undefined;
-    const accessToken = req.cookies?.accessToken || bearerToken;
+    // Prefer the explicit client credential over a potentially stale cookie.
+    const accessToken = bearerToken || req.cookies?.accessToken;
 
     if (!accessToken) {
       throw new ApiError(status.UNAUTHORIZED, 'Unauthorized! No access token provided.');
@@ -34,7 +35,7 @@ export const auth = (...authRoles: UserRole[]) => async (req: Request, res: Resp
 
     next();
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     next(error);
   }
 };

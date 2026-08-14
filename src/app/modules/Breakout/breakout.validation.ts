@@ -41,6 +41,9 @@ const broadcastBreakoutSchema = z.object({
     }),
 });
 
+export type CreateBreakoutInput = NonNullable<z.infer<typeof createBreakoutSchema>["body"]>;
+export type BroadcastBreakoutInput = z.infer<typeof broadcastBreakoutSchema>["body"];
+
 export const BreakoutValidation = {
     meetingCodeSchema,
     createBreakoutSchema,

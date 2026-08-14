@@ -3,7 +3,8 @@ import { StatusCodes } from "http-status-codes";
 import { catchAsync } from "../../../shared/catchAsync";
 import { clientes } from "../../../helpers/s3";
 import { sendResponse } from "../../../shared/sendResponse";
-import { MeetingServices } from "../Meetings/meetings.service.v2";
+import { MeetingServices } from "../Meetings/meetings.service";
+import { requireUserId } from "../../../shared/request";
 
 const issueToken = catchAsync(async (req: Request, res: Response) => {
   if (!req.body.joinCode) {
@@ -14,16 +15,7 @@ const issueToken = catchAsync(async (req: Request, res: Response) => {
     });
   }
 
-  const userId = req.user?.userId;
-  if (!userId) {
-    return sendResponse(res, {
-      statusCode: StatusCodes.UNAUTHORIZED,
-      success: false,
-      message: "Authentication required",
-    });
-  }
-
-  const result = await MeetingServices.getLiveKitToken(req.body.joinCode, userId);
+  const result = await MeetingServices.getLiveKitToken(req.body.joinCode, requireUserId(req));
 
   sendResponse(res, {
     statusCode: StatusCodes.OK,

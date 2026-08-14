@@ -3,15 +3,7 @@ import { StatusCodes } from "http-status-codes";
 import { catchAsync } from "../../../shared/catchAsync";
 import { sendResponse } from "../../../shared/sendResponse";
 import { PollServices } from "./polls.service";
-import ApiError from "../../errors/ApiError";
-
-const requireUserId = (req: Request) => {
-    const userId = req.user?.userId;
-    if (!userId) {
-        throw new ApiError(StatusCodes.UNAUTHORIZED, "Authentication required");
-    }
-    return userId;
-};
+import { requireUserId } from "../../../shared/request";
 
 const createPoll = catchAsync(async (req: Request, res: Response) => {
     const result = await PollServices.createPoll(req.params.code, req.body, requireUserId(req));
@@ -25,7 +17,7 @@ const createPoll = catchAsync(async (req: Request, res: Response) => {
 });
 
 const listPolls = catchAsync(async (req: Request, res: Response) => {
-    const result = await PollServices.listPolls(req.params.code);
+    const result = await PollServices.listPolls(req.params.code, requireUserId(req));
 
     sendResponse(res, {
         statusCode: StatusCodes.OK,
@@ -47,7 +39,7 @@ const submitPollVote = catchAsync(async (req: Request, res: Response) => {
 });
 
 const getPollResults = catchAsync(async (req: Request, res: Response) => {
-    const result = await PollServices.getPollResults(req.params.code, req.params.pollId);
+    const result = await PollServices.getPollResults(req.params.code, req.params.pollId, requireUserId(req));
 
     sendResponse(res, {
         statusCode: StatusCodes.OK,

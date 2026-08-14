@@ -33,6 +33,9 @@ const submitVoteSchema = z.object({
     }),
 });
 
+export type CreatePollInput = z.infer<typeof createPollSchema>["body"];
+export type SubmitVoteInput = z.infer<typeof submitVoteSchema>["body"];
+
 export const PollsValidation = {
     meetingCodeSchema,
     pollIdSchema,

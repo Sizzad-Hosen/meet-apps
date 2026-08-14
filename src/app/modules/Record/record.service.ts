@@ -1,10 +1,44 @@
-import { EncodedFileOutput } from 'livekit-server-sdk';
+import { EncodedFileOutput, S3Upload } from 'livekit-server-sdk';
+import { DeleteObjectCommand, GetObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { StatusCodes } from 'http-status-codes';
-import path from 'path';
-import { mkdir } from 'fs/promises';
 import prisma from '../../../lib/prisma';
 import { clientes } from '../../../helpers/s3';
 import ApiError from '../../errors/ApiError';
+import { logger } from '../../../shared/logger';
+import config from '../../config';
+
+const hasErrorCode = (error: unknown, code: string): boolean => (
+  typeof error === 'object'
+  && error !== null
+  && 'code' in error
+  && error.code === code
+);
+
+const getStorageConfig = () => {
+  const storage = config.recording_storage;
+  if (!storage) {
+    throw new ApiError(StatusCodes.SERVICE_UNAVAILABLE, 'Recording storage is not configured');
+  }
+
+  return {
+    region: storage.region,
+    accessKey: storage.access_key_id,
+    secret: storage.secret_access_key,
+    bucket: storage.bucket,
+  };
+};
+
+const createS3Client = () => {
+  const storage = getStorageConfig();
+  return {
+    storage,
+    client: new S3Client({
+      region: storage.region,
+      credentials: { accessKeyId: storage.accessKey, secretAccessKey: storage.secret }
+    })
+  };
+};
 
 const getMeetingByCode = async (code: string) => {
   const meeting = await prisma.meeting.findUnique({
@@ -61,12 +95,19 @@ export const startRecording = async (code: string, currentUserId: string) => {
   }
 
   const filePath = `recordings/${meeting.id}/${Date.now()}.mp4`;
-  const directory = path.dirname(filePath);
-
-  await mkdir(directory, { recursive: true });
+  const storage = getStorageConfig();
 
   const output = new EncodedFileOutput({
-    filepath: filePath
+    filepath: filePath,
+    output: {
+      case: 's3',
+      value: new S3Upload({
+        accessKey: storage.accessKey,
+        secret: storage.secret,
+        region: storage.region,
+        bucket: storage.bucket
+      })
+    }
   });
 
   let egressInfo;
@@ -95,8 +136,8 @@ export const startRecording = async (code: string, currentUserId: string) => {
         status: 'recording'
       }
     });
-  } catch (error: any) {
-    if (error.code === 'P2002') {
+  } catch (error: unknown) {
+    if (hasErrorCode(error, 'P2002')) {
       throw new ApiError(StatusCodes.CONFLICT, 'Recording already in progress');
     }
     throw error;
@@ -129,8 +170,11 @@ const stopRecording = async (code: string, currentUserId: string) => {
     );
   } catch (error) {
     status = 'failed';
-    // Optionally log the error
-    console.error('Failed to stop egress:', error);
+    logger.error('recording_egress_stop_failed', {
+      recordingId: recording.id,
+      egressId: recording.egress_id,
+      message: error instanceof Error ? error.message : String(error),
+    });
   }
 
   return prisma.recording.update({
@@ -138,7 +182,7 @@ const stopRecording = async (code: string, currentUserId: string) => {
     data: {
       status,
       ended_at: new Date(),
-      ...(typeof durationSeconds === "number" ? { duration_seconds: String(durationSeconds) } : {}),
+      ...(typeof durationSeconds === "number" ? { duration_seconds: durationSeconds } : {}),
     }
   });
 };
@@ -183,15 +227,22 @@ const getDownloadUrl = async (recordingId: string, currentUserId: string) => {
     throw new ApiError(StatusCodes.FORBIDDEN, 'Access denied');
   }
 
-  const baseUrl = process.env.APP_BASE_URL || `http://localhost:${process.env.PORT || 5000}`;
+  if (!recording.s3_key) {
+    throw new ApiError(StatusCodes.NOT_FOUND, 'Recording file is not available');
+  }
 
-  const sanitizedPath = path.posix.normalize(recording.s3_key).replace(/^\/+/, '').replace(/^(\.\.\/)+/, '');
-  const encodedPath = sanitizedPath.split('/').map(encodeURIComponent).join('/');
+  const sanitizedPath = recording.s3_key.replace(/\\/g, '/').replace(/^\/+/, '').replace(/^(\.\.\/)+/, '');
+  const { client, storage } = createS3Client();
+  const url = await getSignedUrl(
+    client,
+    new GetObjectCommand({ Bucket: storage.bucket, Key: sanitizedPath }),
+    { expiresIn: 900 }
+  );
 
   return {
-    url: `${baseUrl}/api/v1/recordings/${recordingId}/download`,
+    url,
     path: sanitizedPath,
-    expires_in: null
+    expires_in: 900
   };
 };
 
@@ -240,20 +291,24 @@ const deleteRecording = async (recordingId: string, currentUserId: string) => {
     try {
       await clientes.egressClient.stopEgress(recording.egress_id);
     } catch (error) {
-      console.error('Failed to stop egress during deletion:', error);
-      // Still allow deletion? Or throw?
-      // For now, throw to prevent deletion if can't stop
+      logger.error('recording_egress_stop_failed', {
+        recordingId: recording.id,
+        egressId: recording.egress_id,
+        message: error instanceof Error ? error.message : String(error),
+      });
       throw new ApiError(StatusCodes.CONFLICT, 'Cannot delete active recording; failed to stop egress');
     }
   }
 
   if (recording.s3_key) {
     try {
-      const { unlink } = await import('fs/promises');
-      await unlink(recording.s3_key);
+      const { client, storage } = createS3Client();
+      await client.send(new DeleteObjectCommand({ Bucket: storage.bucket, Key: recording.s3_key }));
     } catch (error) {
-      console.error('Failed to delete file:', error);
-      // Log but don't throw, as DB deletion is more important
+      throw new ApiError(
+        StatusCodes.BAD_GATEWAY,
+        `Failed to delete recording object: ${error instanceof Error ? error.message : String(error)}`
+      );
     }
   }
 

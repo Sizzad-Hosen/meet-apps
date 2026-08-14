@@ -12,7 +12,7 @@ export const globalErrorHandler = async (
   err: unknown,
   req: Request,
   res: Response,
-  next: NextFunction
+  _next: NextFunction
 ) => {
 
 

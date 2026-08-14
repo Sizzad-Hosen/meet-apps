@@ -1,228 +1,165 @@
+import bcrypt from "bcrypt";
+import { StatusCodes } from "http-status-codes";
+import config from "../../config";
+import ApiError from "../../errors/ApiError";
+import { generateToken, verifyToken } from "../../../helpers/jwtHelpers";
+import prisma from "../../../lib/prisma";
+import { sendEmail } from "../../../shared/sendEmail";
+import type {
+  ForgotPasswordInput,
+  LoginUserInput,
+  RegisterUserInput,
+  ResetPasswordInput,
+} from "./auth.validation";
 
-import bcrypt from 'bcrypt';
-import { StatusCodes } from 'http-status-codes';
-import prisma from '../../../lib/prisma';
-import ApiError from '../../errors/ApiError';
-import config from '../../config';
-import { generateToken, verifyToken } from '../../../helpers/jwtHelpers';
-import { sendEmail } from '../../../shared/sendEmail';
-// import { blockToken } from '../../../helpers/tokenBlocklist';
+const publicUserSelect = {
+  id: true,
+  name: true,
+  email: true,
+  role: true,
+  avatarUrl: true,
+  isVerified: true,
+  createdAt: true,
+} as const;
 
-const registerUser = async (payload: any) => {
+type TokenUser = {
+  id: string;
+  email: string;
+  role: string;
+};
 
-  const passwordHash = await bcrypt.hash(
-    payload.password,
-    Number(config.salt_round) 
-  );
-
-const newUser = await prisma.user.create({
-  data: {
-    name:     payload.name,
-    email:    payload.email,
-    password: passwordHash
-  },
-  select: {
-    id:         true,
-    name:       true,
-    email:      true,
-    role:       true,
-    avatarUrl:  true,
-    isVerified: true,
-    createdAt:  true,
-  },
-});
-
-  const tokenPayload = {
-    userId: newUser.id,
-    email:  newUser.email,
-    role:   newUser.role,
+const createSessionTokens = (user: TokenUser) => {
+  const claims = {
+    userId: user.id,
+    email: user.email,
+    role: user.role,
   };
 
-  const accessToken = generateToken(
-    tokenPayload,
-    config.jwt.jwt_secret as string,
-    config.jwt.expires_in as string
-  );
-
-  const refreshToken = generateToken(
-    tokenPayload,
-    config.jwt.refresh_token_secret as string,
-    config.jwt.refresh_token_expires_in as string
-  );
-
   return {
-    user: newUser,
-    accessToken,
-    refreshToken,
+    accessToken: generateToken(claims, config.jwt.jwt_secret, config.jwt.expires_in),
+    refreshToken: generateToken(
+      claims,
+      config.jwt.refresh_token_secret,
+      config.jwt.refresh_token_expires_in,
+    ),
   };
 };
 
-// Login
-const loginUser = async (payload: any) => {
-
-  // 1. User exists check
+const registerUser = async (payload: RegisterUserInput) => {
+  const email = payload.email.trim().toLowerCase();
   const existingUser = await prisma.user.findUnique({
-    where: { email: payload.email },
+    where: { email },
+    select: { id: true },
   });
 
-  if (!existingUser) {
-    throw new ApiError(StatusCodes.UNAUTHORIZED, 'Invalid email or password');
+  if (existingUser) {
+    throw new ApiError(
+      StatusCodes.CONFLICT,
+      "An account with this email already exists. Sign in instead.",
+    );
   }
 
-  // 2. OAuth user
-  if (!existingUser.password) {
-    throw new ApiError(StatusCodes.UNAUTHORIZED, 'Please login with Google');
-  }
+  const password = await bcrypt.hash(payload.password, config.salt_round);
+  const user = await prisma.user.create({
+    data: {
+      name: payload.name.trim(),
+      email,
+      password,
+    },
+    select: publicUserSelect,
+  });
 
-  // 3. Password compare
-  const isMatch = await bcrypt.compare(
-    payload.password,
-    existingUser.password
-  );
-
-  if (!isMatch) {
-    throw new ApiError(StatusCodes.UNAUTHORIZED, 'Invalid email or password');
-  }
-
-  // 4. Token payload
-  const tokenPayload = {
-    userId: existingUser.id,
-    email:  existingUser.email,
-    role:   existingUser.role,
+  return {
+    user,
+    ...createSessionTokens(user),
   };
+};
 
-  // 5. Token generate
-  const accessToken = generateToken(
-    tokenPayload,
-    config.jwt.jwt_secret as string,
-    config.jwt.expires_in as string
-  );
+const loginUser = async (payload: LoginUserInput) => {
+  const user = await prisma.user.findUnique({
+    where: { email: payload.email.trim().toLowerCase() },
+  });
 
-  const refreshToken = generateToken(
-    tokenPayload,
-    config.jwt.refresh_token_secret as string,
-    config.jwt.refresh_token_expires_in as string
-  );
-  // 6. passwordHash 
-  const { password: _, ...safeUser } = existingUser;
+  if (!user?.password || !(await bcrypt.compare(payload.password, user.password))) {
+    throw new ApiError(StatusCodes.UNAUTHORIZED, "Invalid email or password");
+  }
 
+  const { password: _password, ...safeUser } = user;
   return {
     user: safeUser,
-    accessToken,
-    refreshToken,
+    ...createSessionTokens(user),
   };
 };
 
+const forgotPasswordUser = async (payload: ForgotPasswordInput) => {
+  const email = payload.email.trim().toLowerCase();
+  const user = await prisma.user.findUnique({ where: { email } });
 
-const forgotPasswordUser = async(payload: { email: string })=>{
+  // Return the same response for known and unknown addresses to prevent account enumeration.
+  if (!user) {
+    return { accepted: true };
+  }
+
+  const resetToken = generateToken(
+    {
+      userId: user.id,
+      email: user.email,
+      role: user.role,
+      purpose: "password_reset",
+    },
+    config.jwt.reset_pass_secret,
+    config.jwt.reset_pass_token_expires_in,
+  );
+  const resetLink = `${config.reset_pass_link}?token=${encodeURIComponent(resetToken)}`;
+
+  await sendEmail(
+    user.email,
+    `<p>Use this link to reset your password: <a href="${resetLink}">Reset password</a>.</p>`,
+  );
+
+  return { accepted: true };
+};
+
+const resetPassword = async (payload: ResetPasswordInput) => {
+  const claims = await verifyToken(payload.token, config.jwt.reset_pass_secret);
+
+  if (claims.purpose !== "password_reset" || !claims.userId) {
+    throw new ApiError(StatusCodes.UNAUTHORIZED, "Invalid password reset token");
+  }
 
   const user = await prisma.user.findUnique({
-    where:{
-      email:payload.email
-    }
-  })
-  
-  if(!user){
-    throw new ApiError(StatusCodes.NOT_FOUND, 'User not found with this email');
-  }
-
-  // if(!user.isVerified){
-  //   throw new ApiError(StatusCodes.BAD_REQUEST, 'Please verify your email first');
-  // }
-
-  const resetLink = `${config.reset_pass_link}?token=${user.id}`;
-
-  await sendEmail(user.email, `<p>Click <a href="${resetLink}">here</a> to reset your password.</p>`);
-
-  return {
-    resetLink
-  }
-
-
-}
-
-const resetPassword = async(payload: { email: string, newPassword: string })=>{
-
-   const isUserExist = await prisma.user.findUnique({
-        where: {
-            email: payload.email,
-        }
-    })
-
-    if (!isUserExist) {
-        throw new ApiError(StatusCodes.NOT_FOUND, "User not found");
-    }
-
-    // if (!isUserExist.isVerified) {
-    //     throw new ApiError(StatusCodes.BAD_REQUEST, "Email not verified");
-    // }
-
-
-    const newHashedPassword = await bcrypt.hash(payload.newPassword, Number(config.salt_round));
-    await prisma.user.update({
-        where: {
-            id: isUserExist.id,
-        },
-        data: {
-            password: newHashedPassword,
-        }
-    });
-
-  
-}
-const refreshToken = async (token: string) => {
-  
-  const decoded = await verifyToken(token, config.jwt.refresh_token_secret as string); // ✅ await here
-
-  if (!decoded?.email) {
-    throw new ApiError(StatusCodes.UNAUTHORIZED, 'Invalid or expired refresh token');
-  }
-
-  const existingUser = await prisma.user.findUnique({
-    where: { email: decoded.email },
+    where: { id: claims.userId },
+    select: { id: true },
   });
 
-  if (!existingUser) {
-    throw new ApiError(StatusCodes.UNAUTHORIZED, 'User not found');
+  if (!user) {
+    throw new ApiError(StatusCodes.UNAUTHORIZED, "Invalid password reset token");
   }
 
-  const tokenPayload = {
-    userId: existingUser.id,
-    email:  existingUser.email,
-    role:   existingUser.role,
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { password: await bcrypt.hash(payload.newPassword, config.salt_round) },
+  });
+
+  return { reset: true };
+};
+
+const refreshToken = async (token: string) => {
+  const claims = await verifyToken(token, config.jwt.refresh_token_secret);
+  const user = await prisma.user.findUnique({
+    where: { id: claims.userId },
+    select: publicUserSelect,
+  });
+
+  if (!user || user.email !== claims.email) {
+    throw new ApiError(StatusCodes.UNAUTHORIZED, "Invalid or expired refresh token");
+  }
+
+  return {
+    user,
+    ...createSessionTokens(user),
   };
-
-  const accessToken = generateToken(
-    tokenPayload,
-    config.jwt.jwt_secret as string,
-    config.jwt.expires_in as string,
-  );
-
-  const newRefreshToken = generateToken(
-    tokenPayload,
-    config.jwt.refresh_token_secret as string,
-    config.jwt.refresh_token_expires_in as string,
-  );
-
-  return { accessToken, refreshToken: newRefreshToken };
 };
-
-const logoutUser = async (token: string) => {
-  const decoded = await verifyToken(token, config.jwt.refresh_token_secret as string);
-
-  if (!decoded?.email) {
-    throw new ApiError(StatusCodes.UNAUTHORIZED, 'Invalid or expired refresh token');
-  }
-
-  // ✅ Redis blocklist (production)
-  const now = Math.floor(Date.now() / 1000);
-  const expiresInSeconds = (decoded.exp as number) - now;
-
-  if (expiresInSeconds > 0) {
-    // await blockToken(token, expiresInSeconds);
-  }
-};
-
 
 export const AuthServices = {
   registerUser,
@@ -230,6 +167,4 @@ export const AuthServices = {
   forgotPasswordUser,
   resetPassword,
   refreshToken,
-  logoutUser
 };
-

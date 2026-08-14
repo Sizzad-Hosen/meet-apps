@@ -1,5 +1,6 @@
 import nodemailer from "nodemailer";
 import config from "../app/config";
+import { logger } from "./logger";
 
 export const sendEmail = async (to: string, html: string) => {
   try {
@@ -21,8 +22,12 @@ export const sendEmail = async (to: string, html: string) => {
       html, 
     });
 
-    console.log("✅ Email sent successfully");
+    logger.info("email_sent", { recipient: to });
   } catch (error) {
-    console.error("❌ Error sending email:", error);
+    logger.error("email_send_failed", {
+      recipient: to,
+      message: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
   }
 };

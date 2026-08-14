@@ -2,16 +2,8 @@ import { Request, Response } from "express";
 import { StatusCodes } from "http-status-codes";
 import { catchAsync } from "../../../shared/catchAsync";
 import { sendResponse } from "../../../shared/sendResponse";
-import { MeetingServices } from "./meetings.service.v2";
-import ApiError from "../../errors/ApiError";
-
-const requireUserId = (req: Request) => {
-  const userId = req.user?.userId;
-  if (!userId) {
-    throw new ApiError(StatusCodes.UNAUTHORIZED, 'Authentication required');
-  }
-  return userId;
-};
+import { MeetingServices } from "./meetings.service";
+import { requireUserId } from "../../../shared/request";
 
 const createMeeting = catchAsync(async (req: Request, res: Response) => {
   const result = await MeetingServices.createMeetings(req.body, requireUserId(req));

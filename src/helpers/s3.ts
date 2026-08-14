@@ -1,8 +1,7 @@
 import { EgressClient, RoomServiceClient, WebhookReceiver } from 'livekit-server-sdk';
+import config from '../app/config';
 
-const liveKitUrl = process.env.LIVEKIT_URL || '';
-const liveKitApiKey = process.env.LIVEKIT_API_KEY || '';
-const liveKitApiSecret = process.env.LIVEKIT_API_SECRET || '';
+const { url: liveKitUrl, api_key: liveKitApiKey, api_secret: liveKitApiSecret } = config.livekit;
 
 export const clientes = {
   egressClient: new EgressClient(liveKitUrl, liveKitApiKey, liveKitApiSecret),

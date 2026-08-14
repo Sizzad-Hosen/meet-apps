@@ -1,35 +1,25 @@
 import { StatusCodes } from "http-status-codes";
-import { z } from "zod";
 import prisma from "../../../lib/prisma";
 import ApiError from "../../errors/ApiError";
 import { ensureHost, getMeetingByCodeOrThrow, getParticipantOrThrow } from "../Meetings/meetings.helpers";
 import { pollRepository } from "../../repositories/poll.repository";
+import type { CreatePollInput, SubmitVoteInput } from "./polls.validation";
 
-const createPollPayloadSchema = z.object({
-    question: z.string().trim().min(1).max(255),
-    options: z.array(z.string().trim().min(1).max(255)).min(2),
-});
-
-const submitVotePayloadSchema = z.object({
-    optionId: z.string().uuid(),
-});
-
-const createPoll = async (code: string, payload: unknown, currentUserId: string) => {
+const createPoll = async (code: string, payload: CreatePollInput, currentUserId: string) => {
     const meeting = await getMeetingByCodeOrThrow(code);
     await ensureHost(meeting.id, currentUserId);
-    const parsedPayload = createPollPayloadSchema.parse(payload);
-
     const poll = await pollRepository.createWithOptions(
         meeting.id,
-        parsedPayload.question.trim(),
-        parsedPayload.options.map((option) => option.trim()),
+        payload.question,
+        payload.options,
     );
 
     return poll;
 };
 
-const listPolls = async (code: string) => {
+const listPolls = async (code: string, currentUserId: string) => {
     const meeting = await getMeetingByCodeOrThrow(code);
+    await getParticipantOrThrow(meeting.id, currentUserId);
 
     const polls = await pollRepository.listByMeetingId(meeting.id);
 
@@ -43,10 +33,9 @@ const listPolls = async (code: string) => {
     }));
 };
 
-const submitPollVote = async (code: string, pollId: string, payload: unknown, currentUserId: string) => {
+const submitPollVote = async (code: string, pollId: string, payload: SubmitVoteInput, currentUserId: string) => {
     const meeting = await getMeetingByCodeOrThrow(code);
     await getParticipantOrThrow(meeting.id, currentUserId);
-    const parsedPayload = submitVotePayloadSchema.parse(payload);
 
     const poll = await prisma.poll.findUnique({
         where: { id: pollId },
@@ -61,7 +50,7 @@ const submitPollVote = async (code: string, pollId: string, payload: unknown, cu
         throw new ApiError(StatusCodes.BAD_REQUEST, "Poll is closed");
     }
 
-    const option = poll.options.find((item) => item.id === parsedPayload.optionId);
+    const option = poll.options.find((item) => item.id === payload.optionId);
     if (!option) {
         throw new ApiError(StatusCodes.NOT_FOUND, "Poll option not found");
     }
@@ -91,8 +80,9 @@ const submitPollVote = async (code: string, pollId: string, payload: unknown, cu
     });
 };
 
-const getPollResults = async (code: string, pollId: string) => {
+const getPollResults = async (code: string, pollId: string, currentUserId: string) => {
     const meeting = await getMeetingByCodeOrThrow(code);
+    await getParticipantOrThrow(meeting.id, currentUserId);
 
     const poll = await prisma.poll.findUnique({
         where: { id: pollId },

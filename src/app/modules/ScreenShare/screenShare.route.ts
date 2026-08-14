@@ -1,10 +1,11 @@
+import { Router } from "express";
 import { auth } from "../../middlewares/auth";
 import { ScreenShareControllers } from "./screenShare.controller";
 import { validateRequest } from "../../middlewares/validateRequest";
 import { ScreenShareValidation } from "./screenShare.validation";
 
 
-const router = require("express").Router();
+const router = Router();
 
 router.get("/:code/screenshare/status", validateRequest(ScreenShareValidation.codeOnlySchema), auth(), ScreenShareControllers.getScreenShareStatus);
 router.post("/:code/screenshare/start", validateRequest(ScreenShareValidation.codeOnlySchema), auth(), ScreenShareControllers.startScreenShare);

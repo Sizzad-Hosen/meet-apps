@@ -11,21 +11,24 @@ import { LiveKitRoutes } from "./app/modules/LiveKit/livekit.routes";
 import config from "./app/config";
 import { apiRateLimiter } from "./app/middlewares/rateLimit";
 import { requestLogger } from "./app/middlewares/requestLogger";
+import { notFound } from "./app/middlewares/notFound";
+import { globalErrorHandler } from "./app/middlewares/globalErrorHandler";
 const app = express();
 
 // middlewares
 app.use(helmet());
 app.use(compression());
 app.use(cors({
-  origin: config.cors_origins.length ? config.cors_origins : true,
+  origin: config.cors_origins.length ? config.cors_origins : config.env !== "production",
   credentials: true,
 }));
 app.use(cookieParser());
+app.use(apiRateLimiter);
+app.use(requestLogger);
+// LiveKit webhook signatures require the untouched raw request body.
 app.use("/api/v1/livekit", LiveKitRoutes);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(apiRateLimiter);
-app.use(requestLogger);
 
 app.get("/", (_req, res) => {
   res.status(200).json({
@@ -45,6 +48,6 @@ app.use("/api/v1/screen-share", ScreenShareRoutes);
 app.use("/api/v1/recordings", RecordingRoutes);
 
 // Global Error Handler and Not FOund Middleware
-app.use("*", require("./app/middlewares/notFound").notFound);
-app.use(require("./app/middlewares/globalErrorHandler").globalErrorHandler);
+app.use("*", notFound);
+app.use(globalErrorHandler);
 export default app;

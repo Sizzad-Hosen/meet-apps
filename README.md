@@ -4,6 +4,8 @@ Backend API for a meeting and collaboration platform built with Node.js, Express
 
 This project provides authentication, meeting management, waiting room controls, breakout rooms, polls, screen sharing, recording workflows, and LiveKit token/webhook integration.
 
+See [ARCHITECTURE.md](./ARCHITECTURE.md) for module boundaries, dependency rules, and the secure meeting admission lifecycle.
+
 ## Table of Contents
 
 - [Overview](#overview)
@@ -170,6 +172,7 @@ The project reads configuration from `.env`.
 | `LIVEKIT_API_KEY` | LiveKit API key |
 | `LIVEKIT_API_SECRET` | LiveKit API secret |
 | `LIVEKIT_URL` | LiveKit server URL |
+| `LIVEKIT_TOKEN_TTL` | Room token lifetime, for example `15m` |
 | `AWS_REGION` | S3 region |
 | `AWS_ACCESS_KEY_ID` | S3 access key |
 | `AWS_SECRET_ACCESS_KEY` | S3 secret key |
@@ -358,7 +361,7 @@ Request body:
 
 ```json
 {
-  "email": "john@example.com",
+  "token": "signed-reset-token-from-email",
   "newPassword": "newStrongPassword"
 }
 ```

@@ -1,9 +1,10 @@
+import { Router } from 'express';
 import { auth } from '../../middlewares/auth';
 import { validateRequest } from '../../middlewares/validateRequest';
 import { RecordingControllers } from './record.controller';
 import { RecordValidation } from './record.validation';
 
-const router = require('express').Router();
+const router = Router();
 
 router.post('/:code/start', validateRequest(RecordValidation.codeOnlySchema), auth(), RecordingControllers.startRecording);
 router.post('/:code/stop', validateRequest(RecordValidation.codeOnlySchema), auth(), RecordingControllers.stopRecording);

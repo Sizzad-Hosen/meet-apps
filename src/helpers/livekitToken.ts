@@ -1,20 +1,26 @@
-import { AccessToken } from 'livekit-server-sdk';
+import { AccessToken, TrackSource } from 'livekit-server-sdk';
+import config from '../app/config';
 
 export async function generateLiveKitToken({
   userId,
   roomName,
-  role
+  role,
+  allowScreenShare = true,
+  participantName,
 }: {
   userId: string;
   roomName: string;
   role: "host" | "cohost" | "guest" | string;
+  allowScreenShare?: boolean;
+  participantName?: string;
 }) {
-  const apiKey = process.env.LIVEKIT_API_KEY!;
-  const apiSecret = process.env.LIVEKIT_API_SECRET!;
+  const apiKey = config.livekit.api_key;
+  const apiSecret = config.livekit.api_secret;
 
   const at = new AccessToken(apiKey, apiSecret, {
     identity: userId,
-    ttl: '10m',
+    name: participantName,
+    ttl: config.livekit.token_ttl,
   });
 
   at.addGrant({
@@ -22,6 +28,9 @@ export async function generateLiveKitToken({
     roomJoin: true,
     roomAdmin: role === "host" || role === "cohost",
     canPublish: true,
+    canPublishSources: allowScreenShare
+      ? [TrackSource.CAMERA, TrackSource.MICROPHONE, TrackSource.SCREEN_SHARE, TrackSource.SCREEN_SHARE_AUDIO]
+      : [TrackSource.CAMERA, TrackSource.MICROPHONE],
     canSubscribe: true,
     canPublishData: true,
   });

@@ -3,15 +3,7 @@ import { StatusCodes } from "http-status-codes";
 import { catchAsync } from "../../../shared/catchAsync";
 import { sendResponse } from "../../../shared/sendResponse";
 import { BreakoutServices } from "./breakout.service";
-import ApiError from "../../errors/ApiError";
-
-const requireUserId = (req: Request) => {
-    const userId = req.user?.userId;
-    if (!userId) {
-        throw new ApiError(StatusCodes.UNAUTHORIZED, 'Authentication required');
-    }
-    return userId;
-};
+import { requireUserId } from "../../../shared/request";
 
 const createBreakoutRooms = catchAsync(async (req: Request, res: Response) => {
     const result = await BreakoutServices.createBreakoutRooms(req.params.code, req.body, requireUserId(req));

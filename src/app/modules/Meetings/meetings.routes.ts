@@ -1,3 +1,4 @@
+import { Router } from "express";
 import { auth } from "../../middlewares/auth";
 import { validateRequest } from "../../middlewares/validateRequest";
 import { MeetingsControllers } from "./meetings.controller";
@@ -5,7 +6,7 @@ import { MeetingsValidation } from "./meetings.validation";
 import { BreakoutRoutes } from "../Breakout/breakout.routes";
 import { PollRoutes } from "../Polls/polls.routes";
 
-const router = require("express").Router();
+const router = Router();
 
 router.post("/create",
     validateRequest(MeetingsValidation.createMeetingSchema),

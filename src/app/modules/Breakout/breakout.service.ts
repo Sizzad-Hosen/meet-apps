@@ -3,8 +3,11 @@ import { StatusCodes } from "http-status-codes";
 import prisma from "../../../lib/prisma";
 import ApiError from "../../errors/ApiError";
 import { ensureHost, getMeetingByCodeOrThrow, getParticipantOrThrow } from "../Meetings/meetings.helpers";
+import type { BroadcastBreakoutInput, CreateBreakoutInput } from "./breakout.validation";
 
-const createBreakoutRooms = async (code: string, payload: any, currentUserId: string) => {
+type NormalizedRoom = { name: string; participantIds: string[] };
+
+const createBreakoutRooms = async (code: string, payload: CreateBreakoutInput, currentUserId: string) => {
     const meeting = await getMeetingByCodeOrThrow(code);
     await ensureHost(meeting.id, currentUserId);
 
@@ -20,15 +23,15 @@ const createBreakoutRooms = async (code: string, payload: any, currentUserId: st
         throw new ApiError(StatusCodes.BAD_REQUEST, "No participants available for breakout rooms");
     }
 
-    const roomsPayload = Array.isArray(payload.rooms) && payload.rooms.length > 0
-        ? payload.rooms.map((room: any, index: number) => ({
+    const roomsPayload: NormalizedRoom[] = payload.rooms?.length
+        ? payload.rooms.map((room, index) => ({
             name: room.name?.trim() || `Room ${index + 1}`,
-            participantIds: Array.isArray(room.participantIds) ? room.participantIds : [],
+            participantIds: room.participantIds ?? [],
         }))
         : [{ name: "Room 1", participantIds: [] }, { name: "Room 2", participantIds: [] }];
 
     const rooms = await Promise.all(
-        roomsPayload.map((room: any) => prisma.breakoutRoom.create({
+        roomsPayload.map((room) => prisma.breakoutRoom.create({
             data: {
                 meeting_id: meeting.id,
                 name: room.name,
@@ -39,7 +42,7 @@ const createBreakoutRooms = async (code: string, payload: any, currentUserId: st
     const participantsToAssign = admittedParticipants.filter((participant) => participant.user_id !== meeting.host_id);
     const assignments: Array<{ participantId: string; roomId: string }> = [];
 
-    if (roomsPayload.some((room: any) => room.participantIds.length > 0)) {
+    if (roomsPayload.some((room) => room.participantIds.length > 0)) {
         for (let i = 0; i < roomsPayload.length; i++) {
             const roomPayload = roomsPayload[i];
             const room = rooms[i];
@@ -73,6 +76,7 @@ const createBreakoutRooms = async (code: string, payload: any, currentUserId: st
 
 const listBreakoutRooms = async (code: string, currentUserId: string) => {
     const meeting = await getMeetingByCodeOrThrow(code);
+    await getParticipantOrThrow(meeting.id, currentUserId);
 
     const rooms = await prisma.breakoutRoom.findMany({
         where: { meeting_id: meeting.id },
@@ -156,13 +160,9 @@ const endAllBreakoutRooms = async (code: string, currentUserId: string) => {
     return { ended: true };
 };
 
-const broadcastBreakoutMessage = async (code: string, payload: any, currentUserId: string) => {
+const broadcastBreakoutMessage = async (code: string, payload: BroadcastBreakoutInput, currentUserId: string) => {
     const meeting = await getMeetingByCodeOrThrow(code);
     await ensureHost(meeting.id, currentUserId);
-
-    if (!payload.message || typeof payload.message !== "string" || payload.message.trim().length === 0) {
-        throw new ApiError(StatusCodes.BAD_REQUEST, "Message is required");
-    }
 
     return prisma.breakoutMessage.create({
         data: {

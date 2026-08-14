@@ -2,15 +2,8 @@ import { Request, Response } from 'express';
 import { StatusCodes } from 'http-status-codes';
 import { RecordingServices } from './record.service';
 import { sendResponse } from '../../../shared/sendResponse';
-import ApiError from '../../errors/ApiError';
 import { catchAsync } from '../../../shared/catchAsync';
-
-const requireUserId = (req: Request): string => {
-  if (!req.user?.userId) {
-    throw new ApiError(StatusCodes.UNAUTHORIZED, "Unauthorized");
-  }
-  return req.user.userId;
-};
+import { requireUserId } from '../../../shared/request';
 
 const startRecording = catchAsync(async (req: Request, res: Response) => {
   const result = await RecordingServices.startRecording(req.params.code, requireUserId(req));

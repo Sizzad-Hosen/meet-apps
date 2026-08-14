@@ -24,7 +24,9 @@ const createMeetingSchema = z.object({
 
 const joinMeetingSchema = z.object({
   body: z.object({
-    joinCode: z.string().trim().min(4).max(12),
+    joinCode: z.string()
+      .transform((code) => code.replace(/[^a-z0-9]/gi, "").toUpperCase())
+      .pipe(z.string().min(4).max(12)),
   }),
 });
 
@@ -50,6 +52,9 @@ const updateMeetingSchema = z.object({
     message: "At least one field is required",
   }),
 });
+
+export type CreateMeetingInput = z.infer<typeof createMeetingSchema>["body"];
+export type UpdateMeetingInput = z.infer<typeof updateMeetingSchema>["body"];
 
 export const MeetingsValidation = {
   createMeetingSchema,
